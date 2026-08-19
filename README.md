@@ -1,15 +1,15 @@
 # websearch-plugins
 
-个人用的 **DeepSeek Harness** 搜索插件包：不依赖任何 API Key 的**聚合搜索** + **目标网址直接抓取**，
-用于 harness 的 web 能力接缝（`ctx.web`）。注册后 `web_search` 与 `web_fetch` 工具在
+个人用的 **DeepSeek Harness** 搜索插件包：**聚合搜索**（16 个国内+海外引擎，结果层过滤）+
+**目标网址直接抓取**，全部**不依赖任何 API Key**。注册后 `web_search` / `web_fetch` 工具在
 没有 `DEEPSEEK_API_KEY` 的环境里也能真实可用。
 
 ## 基座思路：PhantomJS 式无头抓取
 
-基座是 [phantomjs](https://github.com/asdshuaishuai/phantomjs) 的无头抓取思想——
-“可脚本化的无头浏览器”，不渲染 GUI、不依赖浏览器，直接用代码去拿网页数据给 **agent** 用。
-这里把同一思路在 Node 里实现成 **全方面适配** 的聚合搜索：不针对某一台机器/某个网络，而是
-把国内 + 海外的引擎全部配上；谁通谁用，网络异常/被墙/验证码/空结果的引擎直接在**结果层过滤**。
+基座是 [asdshuaishuai/phantomjs](https://github.com/asdshuaishuai/phantomjs) 的无头抓取思想——
+“scriptable headless browser”：不渲染 GUI、不依赖浏览器，直接用代码把网页数据拿给 **agent** 用。
+这里把同一哲学在 Node 里落地为 **全方面适配** 的聚合搜索：不针对某台机器/某个网络，而是把
+国内 + 海外的引擎全部配上；谁通谁用，网络异常/被墙/验证码/空结果的引擎直接在**结果层过滤**。
 
 ## 引擎清单（16 个，全部注册、按需过滤）
 
@@ -19,7 +19,6 @@
 | 海外 overseas | `bing` 必应国际、`google`、`duckduckgo`、`brave`、`mojeek`、`qwant`、`ecosia`、`yahoo`、`yandex`、`startpage`、`searx`（SearXNG searx.be） |
 
 每个引擎既可单独用（`phantom-<id>`），也默认全部汇入聚合 `phantom-aggregate`。
-某引擎在当前机器上不通（超时/403/JS验证/解析空）时，聚合自动把它过滤掉，绝不影响整体结果。
 
 ## 三个 provider
 
@@ -31,6 +30,43 @@
 - **`phantom-http`**（`web_fetch`）：直接抓取目标网址。手工逐跳处理重定向，每跳做
   **SSRF 防护**（拒绝环回/私网/链路本地/CGNAT/保留地址，域名先解析再校验）；
   非 2xx 视为结果而非错误；HTML 上限 1MB / 文本 512KB，超出截断并置 `truncated`。
+
+## 实现原理
+
+### 一条搜索请求怎么走
+
+```
+模型调用 web_search(query)
+  └─ dsh-tool-web 工具 → ctx.web.search({query, maxResults})     ← harness 的 web 接缝
+       └─ seam 按 web.searchProvider 选中 phantom-aggregate
+            └─ AggregateSearchProvider.search()
+                 ├─ 并行 fan-out：16 个 SerpSearchProvider（各自 fetch + 解析，互不阻塞）
+                 ├─ Promise.allSettled → 结果层过滤
+                 │    ├─ rejected（超时/403/被墙/网络错误）→ 丢弃，计入“已过滤异常”
+                 │    └─ fulfilled 但解析为空 → 丢弃，计入“已过滤无结果”
+                 ├─ 跨引擎去重（URL 归一化）+ 轮询交错
+                 └─ 按 maxResults 封顶 → WebSearchResult{ sources, content(聚合摘要) }
+```
+
+### 关键设计
+
+- **能力接缝，不是工具**：插件只做 `ctx.web.registerSearchProvider({id, available(), search()})`。
+  面向模型的 `web_search` 名称/描述/schema/呈现全部由 `dsh-tool-web` 拥有；provider 一行都不肖
+  写进模型。`available()` 是廉价本地检查（无网络 IO）。
+- **为什么是“结果层过滤”**：聚合的输入是“16 个引擎全上”= 通用适配（不针对本地）；输出层把
+  不通的引擎滤掉 = 结果层过滤。所以这台机器通不了 Google/DDG 也不影响聚合结果，换到出口更宽的
+  网络它们会自动开始贡献。
+- **单引擎解析是 best-effort**：每个引擎一个轻量正则解析器（提取结果 URL/标题/摘要）；某引擎的
+  专属选择器解析不到时自动回落通用 `<h3>` 锚点扫描；源头标记质量差（如百度/360 把结果包在
+  `baidu.com/link`、`so.com/link` 跳转里）是引擎自身行为，不是插件缺陷。
+- **fetch 的 SSRF 防护**：`web_fetch` 用手工逐跳跟随重定向，每一跳先把域名/字面 IP
+  解析并校验——环回(127.0.0.0/8, ::1)、私网(10/8, 172.16/12, 192.168/16)、链路本地
+  (169.254/16, fe80::/10)、CGNAT(100.64/10)、保留/组播地址一律拒绝，才发请求。
+- **错误分类**：调用方取消 → `WEB_ABORTED`；单引擎超时/HTTP 失败 → `WEB_PROVIDER_ERROR`
+  （聚合层整体捕获并过滤，不打断整次搜索）；`web_fetch` 抓非公网目标 → `WEB_PROVIDER_ERROR`。
+- **零外部运行时依赖**：只用 Node 内建 `fetch` / `node:net` / `node:dns`；
+  `@deepseek-ai/dsh-web` 的 `WebError` 通过包内 `node_modules -> ~/.dsh/profiles/node_modules`
+  符号链接解析（与 harness 的 shared-module fallback 一致）。
 
 ## 结构
 
@@ -50,9 +86,6 @@ websearch-plugins/
     plugin.mjs            # 模拟 ctx.web 注册表：聚合搜索 + fetch + SSRF 验证
   README.md LICENSE
 ```
-
-零外部运行时依赖（Node 内建 `fetch`/`node:net`/`node:dns`）；`@deepseek-ai/dsh-web`
-通过包内 `node_modules -> ~/.dsh/profiles/node_modules` 符号链接解析。
 
 ## 接入方式
 
@@ -114,6 +147,14 @@ config:
 - 单引擎超时/HTTP 失败 → 各自 `WEB_PROVIDER_ERROR`；聚合层全部捕获并过滤，不抛错
 - `web_fetch` 抓私网/环回/链路本地目标 → `WEB_PROVIDER_ERROR`（SSRF 防护）
 - 所有 provider 均 honor `AbortSignal`；`available()` 为廉价本地检查（无网络 IO）
+
+## 致谢
+
+感谢上游参考仓库 **[asdshuaishuai/phantomjs](https://github.com/asdshuaishuai/phantomjs)**：
+本项目的基座正是它“scriptable headless browser / 用脚本直接取网页数据”的思路，这里把同一哲学
+在 Node 中实现为聚合搜索与直接抓取。同时感谢 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
+的 web 能力接缝（`@deepseek-ai/dsh-web` 定义 `ctx.web`，`dsh-tool-web` 承载面向模型的工具；
+provider 写法参考了 `@deepseek-ai/dsh-web-search-deepseek`）。
 
 ## 自检
 
