@@ -6,10 +6,11 @@
 
 ## 基座思路：PhantomJS 式无头抓取
 
-基座是 [asdshuaishuai/phantomjs](https://github.com/asdshuaishuai/phantomjs) 的无头抓取思想——
-“scriptable headless browser”：不渲染 GUI、不依赖浏览器，直接用代码把网页数据拿给 **agent** 用。
-这里把同一哲学在 Node 里落地为 **全方面适配** 的聚合搜索：不针对某台机器/某个网络，而是把
-国内 + 海外的引擎全部配上；谁通谁用，网络异常/被墙/验证码/空结果的引擎直接在**结果层过滤**。
+基座是最上游的 [ariya/phantomjs](https://github.com/ariya/phantomjs)（**BSD-3-Clause**）的无头抓取
+思想——“scriptable headless browser”：不渲染 GUI、不依赖浏览器，直接用代码把网页数据拿给 **agent** 用。
+（本地基座素材来自我的 fork [asdshuaishuai/phantomjs](https://github.com/asdshuaishuai/phantomjs)，
+与上游是同一份源码。）这里把同一哲学在 Node 里落地为 **全方面适配** 的聚合搜索：不针对某台机器/某个网络，
+而是把国内 + 海外的引擎全部配上；谁通谁用，网络异常/被墙/验证码/空结果的引擎直接在**结果层过滤**。
 
 ## 引擎清单（16 个，全部注册、按需过滤）
 
@@ -150,11 +151,12 @@ config:
 
 ## 致谢
 
-感谢上游参考仓库 **[asdshuaishuai/phantomjs](https://github.com/asdshuaishuai/phantomjs)**：
-本项目的基座正是它“scriptable headless browser / 用脚本直接取网页数据”的思路，这里把同一哲学
-在 Node 中实现为聚合搜索与直接抓取。同时感谢 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)
-的 web 能力接缝（`@deepseek-ai/dsh-web` 定义 `ctx.web`，`dsh-tool-web` 承载面向模型的工具；
-provider 写法参考了 `@deepseek-ai/dsh-web-search-deepseek`）。
+感谢最上游的 PhantomJS 项目 **[ariya/phantomjs](https://github.com/ariya/phantomjs)**
+（**BSD-3-Clause**，已归档）：本项目只借用了它“scriptable headless browser / 用脚本直接取网页数据”
+的思路，**未复制其代码**；这里把同一哲学在 Node 中实现为聚合搜索与直接抓取。
+同时感谢 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 的 web 能力接缝
+（`@deepseek-ai/dsh-web` 定义 `ctx.web`，`dsh-tool-web` 承载面向模型的工具；provider 写法参考了
+`@deepseek-ai/dsh-web-search-deepseek`）。本项目代码为原创，LICENSE 采用 MIT。
 
 ## 自检
 
