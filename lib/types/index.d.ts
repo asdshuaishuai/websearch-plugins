@@ -23,10 +23,18 @@ export interface EngineOverride {
 }
 
 export interface PhantomChromeConfig {
-	/** Explicit Chrome/Chromium binary path; empty auto-detects. */
+	/** Explicit Chrome/Chromium binary path; empty auto-detects (headless-shell preferred). */
 	path?: string;
+	/** Per-render timeout in milliseconds. */
 	timeoutMs?: number;
+	/** Render settle delay after load (ms) so client-side markup appears. */
+	settleMs?: number;
+	/** Virtual-time budget for the spawn-per-shot fallback renderer. */
 	virtualTime?: number;
+	/** Timeout for bringing up the persistent headless browser. */
+	browserTimeoutMs?: number;
+	/** UA override sent to the SERP while rendering. */
+	userAgent?: string;
 }
 
 export interface PhantomFetchConfig {

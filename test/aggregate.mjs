@@ -7,17 +7,17 @@
  * @module websearch-plugins/test
  */
 import { AggregateSearchProvider, resolveAggregate } from "../lib/search.js";
-import { DEFAULT_USER_AGENT } from "../lib/net.js";
+import { DEFAULT_CONFIG } from "../lib/index.js";
 
 const query = process.argv[2] ?? "DeepSeek Harness";
 const maxResults = Number(process.argv[3] ?? 10);
 
+// Match production defaults (browser headers, cookie jar, fetchMode auto,
+// headless chrome params) so the latency/profile is representative.
 const config = {
-	userAgent: DEFAULT_USER_AGENT,
+	...DEFAULT_CONFIG,
 	engineTimeoutMs: 8000,
-	aggregateCount: 5,
 	aggregateMaxResults: maxResults,
-	include: [],
 	blockedHosts: ["www.microsoft.com", "www.msn.com"]
 };
 
