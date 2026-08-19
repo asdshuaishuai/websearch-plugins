@@ -18,6 +18,15 @@ export interface EngineOverride {
 	count?: number;
 	/** Fetch timeout for this engine in milliseconds. */
 	timeoutMs?: number;
+	/** Override this engine's retrieval mode: 'http' | 'chrome' | 'auto'. */
+	fetchMode?: 'http' | 'chrome' | 'auto';
+}
+
+export interface PhantomChromeConfig {
+	/** Explicit Chrome/Chromium binary path; empty auto-detects. */
+	path?: string;
+	timeoutMs?: number;
+	virtualTime?: number;
 }
 
 export interface PhantomFetchConfig {
@@ -42,6 +51,10 @@ export interface WebSearchPluginsConfig {
 	blockedHosts?: string[];
 	/** Per-engine overrides keyed by engine id. */
 	engines?: Record<string, EngineOverride>;
+	/** SERP retrieval mode: 'http' | 'chrome' | 'auto' (default 'auto'). */
+	fetchMode?: 'http' | 'chrome' | 'auto';
+	/** Headless-Chrome rendering options for the JS-shell fallback. */
+	chrome?: PhantomChromeConfig;
 	/** Direct-URL fetch provider options. */
 	fetch?: PhantomFetchConfig;
 }

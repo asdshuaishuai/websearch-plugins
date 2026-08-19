@@ -41,7 +41,10 @@
   └─ dsh-tool-web 工具 → ctx.web.search({query, maxResults})     ← harness 的 web 接缝
        └─ seam 按 web.searchProvider 选中 phantom-aggregate
             └─ AggregateSearchProvider.search()
-                 ├─ 并行 fan-out：16 个 SerpSearchProvider（各自 fetch + 解析，互不阻塞）
+                 ├─ 并行 fan-out：16 个 SerpSearchProvider（各自抓取 + 解析，互不阻塞）
+                 │    ├─ 抓取层 = 浏览器式无头请求（见“关键设计”）
+                 │    │    ├─ HTTP 主路：Chrome 桌面级完整标头 + cookie jar
+                 │    │    └─ JS 壳/反爬页 → 真无头 Chrome(--headless --dump-dom)渲染再解析
                  ├─ Promise.allSettled → 结果层过滤
                  │    ├─ rejected（超时/403/被墙/网络错误）→ 丢弃，计入“已过滤异常”
                  │    └─ fulfilled 但解析为空 → 丢弃，计入“已过滤无结果”
@@ -57,6 +60,17 @@
 - **为什么是“结果层过滤”**：聚合的输入是“16 个引擎全上”= 通用适配（不针对本地）；输出层把
   不通的引擎滤掉 = 结果层过滤。所以这台机器通不了 Google/DDG 也不影响聚合结果，换到出口更宽的
   网络它们会自动开始贡献。
+- **浏览器式无头请求层（PhantomJS 的法子）**：对端网站要看到的是一个真实浏览器——
+  - 请求默认带完整 Chrome 桌面级标头（`sec-ch-ua`/`sec-fetch-*`/`upgrade-insecure-requests`/`accept-language` 等），
+    而不是裸库 UA；
+  - 进程内按域名维护 **cookie jar**，首次访问种下的 `BAIDUID`/`MUID` 之类延续到后续搜索，
+    像浏览器会话一样；
+  - 当返回体是 JS 壳/反爬页（无结果标记却有 `captcha/x5sec/are you not a robot` 等标记）时，
+    `fetchMode: auto` 会把 URL 丢给**真无头 Chrome**（`--headless=new --dump-dom`）渲染出真实 DOM 再解析——
+    这就是上游 PhantomJS 的那句 “scriptable headless browser”。对 IP 层风控（本机把
+    Shenma/Yandex/Mojeek 判断为自动查询）无头浏览器也过不去，结果层照样过滤；
+    换到放行的网络/IP 上，这类 JS 壳引擎会自动被无头 Chrome 解锁。
+  - 每引擎的 Chrome 兜底带**负缓存**（连续失败 3 次本进程内不再试），避免被风控的引擎每次都白等几秒。
 - **单引擎解析是 best-effort**：每个引擎一个轻量正则解析器（提取结果 URL/标题/摘要）；某引擎的
   专属选择器解析不到时自动回落通用 `<h3>` 锚点扫描；源头标记质量差（如百度/360 把结果包在
   `baidu.com/link`、`so.com/link` 跳转里）是引擎自身行为，不是插件缺陷。
@@ -76,13 +90,15 @@ websearch-plugins/
   package.json            # 私有 ESM 包，主入口 lib/index.js
   lib/
     index.js              # Cordis 插件：name / inject(['web']) / apply()，注册全部 provider
-    net.js                # 共享网络层 + 文本/URL工具 + SSRF 防护
-    engines.js            # 16 个引擎的 URL 构造 + 解析器（失败回落通用 h3 锚点）
-    search.js             # 单引擎 provider + 聚合 provider（并行/过滤/去重/交错）
+    net.js                # 共享网络层（浏览器式标头 + cookie jar）+ 文本/URL工具 + SSRF 防护
+    engines.js            # 16 个引擎的 URL 构造 + 解析器（失败回落通用 h3 锚点）+ JS 壳判定
+    chrome.js             # 真无头 Chrome(--headless --dump-dom)渲染后端（PhantomJS 无头另一半）
+    search.js             # 单引擎 provider（HTTP/auto/Chrome）+ 聚合 provider
     fetch.js              # web_fetch 的目标网址抓取 provider
     types/index.d.ts
   test/
-    engines.mjs           # 引擎连通性巡检矩阵
+    engines.mjs           # 引擎连通性巡检矩阵（HTTP/auto/chrome 三档）
+    diagnose.mjs          # 失败归因：网络 vs 风控/JS壳 vs 解析空
     aggregate.mjs         # 直接跑聚合 provider
     plugin.mjs            # 模拟 ctx.web 注册表：聚合搜索 + fetch + SSRF 验证
   README.md LICENSE
@@ -131,9 +147,15 @@ config:
   engineTimeoutMs: 7000     # 每个引擎的默认超时（毫秒）；通不了的引擎按此快速过滤
   include: [baidu, bing, google]   # 只聚合这些引擎（默认全部）
   blockedHosts: [...]              # 额外过滤的域名
-  engines:                  # 单引擎覆盖
+  fetchMode: auto           # http(纯浏览器式抓取) | chrome(恒走无头Chrome) | auto(HTTP优先,JS壳自动Chrome兜底)
+  chrome:                   # 无头 Chrome 渲染后端
+    path: ""                # 留空自动探测（/opt/google/chrome/chrome 等）
+    timeoutMs: 9000
+    virtualTime: 4000
+  engines:                  # 单引擎覆盖（可带 fetchMode）
     bing:    { count: 8, timeoutMs: 5000 }
     baidu:   { count: 5 }
+    smcn:    { fetchMode: chrome }   # 例：神马强制无头渲染
   userAgent: "Mozilla/5.0 ..."
   fetch:                    # web_fetch
     timeoutMs: 15000
@@ -141,6 +163,10 @@ config:
     maxBytesText: 524288
     maxRedirects: 5
 ```
+
+> 失败归因速查：**网络不通**（Google/DDG/Brave/Qwant/Yahoo/Startpage/SearXNG 在本机超时）
+> 属出口环境问题，暂不处理；**IP 层风控**（神马/Yandex 验证码、Mojeek 403）连真无头浏览器都过不去，
+> 结果层自动过滤；换到放行网络它们才会上。解析器对各引擎真模板均可用。
 
 ## 错误与取消
 
@@ -161,7 +187,8 @@ config:
 ## 自检
 
 ```sh
-node test/engines.mjs             # 16 引擎连通性矩阵（不通属正常，聚合会过滤）
-node test/aggregate.mjs "query"   # 直接跑聚合，看过滤/去重/摘要
-node test/plugin.mjs "query"      # 模拟 seam：聚合 + web_fetch + SSRF 防护
+node test/engines.mjs               # 引擎连通性矩阵（http；传 auto/chrome 可测无头兜底）
+node test/diagnose.mjs              # 失败归因：网络不通 vs 风控/JS壳 vs 解析
+node test/aggregate.mjs "query"     # 直接跑聚合，看过滤/去重/摘要
+node test/plugin.mjs "query"        # 模拟 seam：聚合 + web_fetch + SSRF 防护
 ```

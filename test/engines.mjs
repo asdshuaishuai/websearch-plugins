@@ -9,19 +9,22 @@
  */
 import { ENGINES, normalizeEngine } from "../lib/engines.js";
 import { SerpSearchProvider } from "../lib/search.js";
-import { DEFAULT_BLOCKED_HOSTS, DEFAULT_USER_AGENT } from "../lib/net.js";
+import { DEFAULT_BLOCKED_HOSTS } from "../lib/net.js";
 
 const query = process.argv[2] ?? "headless browser";
 const timeoutMs = Number(process.argv[3] ?? 8000);
+const fetchMode = process.argv[4] ?? "http"; // http | chrome | auto
 
 const config = {
-	userAgent: DEFAULT_USER_AGENT,
+	userAgent: undefined,
 	blockedHosts: DEFAULT_BLOCKED_HOSTS,
 	engineTimeoutMs: timeoutMs,
+	fetchMode,
+	chrome: { timeoutMs: 12000, virtualTime: 5000 },
 	engines: {}
 };
 
-console.log(`engine sweep: query=${JSON.stringify(query)} timeout=${timeoutMs}ms\n`);
+console.log(`engine sweep: query=${JSON.stringify(query)} timeout=${timeoutMs}ms fetchMode=${fetchMode}\n`);
 const rows = [];
 for (const engine of ENGINES) {
 	const provider = new SerpSearchProvider(engine, () => config);
