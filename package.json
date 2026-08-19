@@ -1,0 +1,31 @@
+{
+  "name": "websearch-plugins",
+  "version": "0.1.0",
+  "description": "Personal, API-key-free web plugins for the DeepSeek Harness web seam (ctx.web): an aggregate search across 16 domestic + overseas engines with result-layer failure filtering, plus a direct target-URL fetch with SSRF protection (PhantomJS-style headless scraping).",
+  "private": true,
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "README.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-web": "^0.1.0-rc.7"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-web": {
+      "optional": true
+    }
+  },
+  "license": "MIT"
+}

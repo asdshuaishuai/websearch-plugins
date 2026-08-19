@@ -1,0 +1,52 @@
+/**
+ * Type declarations for `websearch-plugins`.
+ * @module websearch-plugins
+ */
+import type { Context } from '@deepseek-ai/cordis';
+
+export type EngineRegion = 'domestic' | 'overseas';
+
+export interface EngineSpec {
+	readonly id: string;
+	readonly region: EngineRegion;
+	readonly label: string;
+	readonly countMax: number;
+}
+
+export interface EngineOverride {
+	/** Results to request for this engine (1..countMax). */
+	count?: number;
+	/** Fetch timeout for this engine in milliseconds. */
+	timeoutMs?: number;
+}
+
+export interface PhantomFetchConfig {
+	timeoutMs?: number;
+	maxBytesHtml?: number;
+	maxBytesText?: number;
+	maxRedirects?: number;
+}
+
+export interface WebSearchPluginsConfig {
+	/** Per-engine results to request when the aggregate fans out (default 5). */
+	engineCount?: number;
+	/** Total source cap when the caller omits maxResults (default 10). */
+	aggregateMaxResults?: number;
+	/** Default per-engine fetch timeout (default 7000). */
+	engineTimeoutMs?: number;
+	/** Engine ids to include in the aggregate; empty means all. */
+	include?: string[];
+	/** User-Agent sent to SERP endpoints (also reused by the fetch provider). */
+	userAgent?: string;
+	/** Hosts whose results are never surfaced. */
+	blockedHosts?: string[];
+	/** Per-engine overrides keyed by engine id. */
+	engines?: Record<string, EngineOverride>;
+	/** Direct-URL fetch provider options. */
+	fetch?: PhantomFetchConfig;
+}
+
+export declare const name: string;
+export declare const inject: readonly string[];
+export declare const DEFAULT_CONFIG: Readonly<WebSearchPluginsConfig>;
+export declare function apply(ctx: Context, config?: WebSearchPluginsConfig): () => void;
