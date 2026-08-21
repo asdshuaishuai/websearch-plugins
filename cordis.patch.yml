@@ -1,0 +1,27 @@
+# websearch-plugins — self-contained standard dsh bundle layer.
+#
+# Installed as a profile bundle (e.g. `dsh plugin --profile web add
+# <this-package>`), this layer:
+#   1. registers the plugin's providers (all 16 search engines, the
+#      `phantom-aggregate` fan-out, and the `phantom-http` fetch provider),
+#   2. selects `phantom-aggregate` on the web seam and wires the fetch
+#      provider (`web_fetch`),
+#   3. enables `web_fetch` (the base disables it) while keeping the base's
+#      60s search budget.
+#
+# The DeepSeek search provider stays registered untouched; switch
+# `searchProvider` back to `deepseek-official` to use it again.
+- insert:
+    - id: web-search-phantom
+      name: websearch-plugins
+      config: {}
+
+- id: web
+  config:
+    searchProvider: phantom-aggregate
+    fetchProvider: phantom-http
+
+- id: tool-web
+  config:
+    fetch: true
+    searchTimeoutMs: 60000

@@ -89,7 +89,8 @@
 
 ```
 websearch-plugins/
-  package.json            # 私有 ESM 包，主入口 lib/index.js
+  package.json            # 标准 DSH 插件声明：dsh.bundle.patch / exports / keywords / repository
+  cordis.patch.yml        # 插件自带的 bundle 层：注册 + 选中聚合 + 挂 fetch + 打开 web_fetch
   lib/
     index.js              # Cordis 插件：name / inject(['web']) / apply()，注册全部 provider
     net.js                # 共享网络层（浏览器式标头 + cookie jar）+ 文本/URL工具 + SSRF 防护
@@ -108,37 +109,40 @@ websearch-plugins/
   README.md LICENSE
 ```
 
-## 接入方式
+## 接入方式（标准 DSH 插件）
 
-1. 软链到 harness 共享 fallback，让 loader 能按名解析：
+本包是一个**标准 DSH 插件**：`package.json` 声明了 `dsh.bundle.patch`（自带
+`cordis.patch.yml` 层），因此可用 `dsh plugin` 直接装成 profile bundle，**不用手工改 profile 补丁**
+（注册 provider、选中 `phantom-aggregate`、挂 `phantom-http`、打开 `web_fetch` 全部由插件自带层完成）。
 
-   ```sh
-   ln -s /home/kelthas/code/websearch/websearch-plugins ~/.dsh/profiles/node_modules/websearch-plugins
-   ```
+本地安装：
 
-2. `~/.dsh/profiles/web/cordis.patch.yml`：
+```sh
+dsh plugin --profile web add file:/home/kelthas/code/websearch/websearch-plugins
+```
 
-   ```yaml
-   - insert:
-       - id: web-search-phantom
-         name: websearch-plugins
-         config: {}
-   # web 接缝选中聚合搜索，并挂上直接抓取 provider
-   - id: web
-     config:
-       searchProvider: phantom-aggregate
-       fetchProvider: phantom-http
-   # base 默认禁用 web_fetch，这里打开（保留 base 的搜索预算）
-   - id: tool-web
-     config:
-       fetch: true
-       searchTimeoutMs: 60000
-   ```
+从 GitHub 安装（最上游发布源）：
 
-3. 重启 GUI（在启动 `dsh web` 的终端里 Ctrl+C 后重新运行），刷新页面。
+```sh
+dsh plugin --profile web add github:asdshuaishuai/websearch-plugins
+```
 
-> 想切回 DeepSeek 官方搜索：把 `searchProvider` 改回 `deepseek-official` 即可（deepseek
-> provider 从未被删除）。
+`dsh plugin` 会把它加进 `dsh.profile.bundles`，之后**重启 GUI**（在启动 `dsh web` 的终端里
+Ctrl+C 后重新运行）并刷新页面即生效。
+
+**旧方式（手动）**——仅当不便 `dsh plugin` 时可选：软链
+`~/.dsh/profiles/node_modules/websearch-plugins` → 本目录，并手工在
+`~/.dsh/profiles/web/cordis.patch.yml` 写 `insert: [web-search-phantom]` +
+`web.searchProvider/fetchProvider` + `tool-web.fetch` 三处。装了标准 bundle 后不要再叠加手工条目，
+避免重复 id。
+
+> 想切回 DeepSeek 官方搜索：把 profile 补丁（或本包 `cordis.patch.yml` 里的）
+> `web.searchProvider` 改回 `deepseek-official` 即可（deepseek provider 从未被删除）。
+
+## 仓库 topic（供 dshmk 插件市场收录）
+
+本仓库声明了 `dsh-plugin`（[dshmk.com 的 DSH 插件市场](https://www.dshmk.com/)正是按此 topic
+自动收录 GitHub 项目）以及 `deepseek-harness` / `web-search` / `headless-browser` / `phantomjs`。
 
 ## 配置
 
@@ -199,3 +203,15 @@ node test/aggregate.mjs "query"     # 直接跑聚合，看过滤/去重/摘要
 node test/headless.mjs              # 常驻无头渲染服务：JS 执行 + 渲染 + 复用提速
 node test/plugin.mjs "query"        # 模拟 seam：聚合 + web_fetch + SSRF 防护
 ```
+
+## 继续迭代（维护指南）
+
+- **加引擎**：在 `lib/engines.js` 的 `ENGINES` 数组加一个 `engine(id, region, label, buildUrl, parse)`，
+  解析器 Share 通用 `<h3>` 回落，无需改别处；聚合/单引擎/过滤自动生效。
+- **调优某引擎**：profile 补丁 `web-search-phantom.config.engines.<id>` 里给 `count/timeoutMs/fetchMode`，
+  或全局 `fetchMode` / `chrome` / `engineTimeoutMs`。
+- **改配置形状**：动了 `index.js` 的 `DEFAULT_CONFIG` 后同步 `lib/types/index.d.ts`。
+- **回归**：跑上面 `自检` 一节全部脚本再提交。
+- **发布新版本**：`git tag vX.Y.Z && git push origin vX.Y.Z`，再 `gh release create vX.Y.Z`；
+  标准 bundle 安装方（`dsh plugin add github:...`）会拿到新版本。仓库保持 `dsh-plugin` topic，
+  dshmk 插件市场会自动收录/更新。
