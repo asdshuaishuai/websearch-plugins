@@ -152,7 +152,12 @@ Ctrl+C 后重新运行）并刷新页面即生效。
 config:
   engineCount: 5            # 聚合时每个引擎取的条数（默认 5）
   aggregateMaxResults: 10   # 无 maxResults 时的总条数上限
-  engineTimeoutMs: 7000     # 每个引擎的默认超时（毫秒）；通不了的引擎按此快速过滤
+  engineTimeoutMs: 6000     # 每个引擎的默认超时（毫秒）；通不了的引擎按此快速过滤
+  # 聚合“达标即回”：凑够 aggregateQuorum 个成功引擎（或结果数已够）且过了
+  # aggregateMinWaitMs 就提前返回，不等最慢（往往不可达/被风控）的引擎
+  aggregateQuorum: 3
+  aggregateMinWaitMs: 800
+  aggregateCacheMs: 30000   # 同 query 的短时缓存（毫秒，0=关闭；重复查询秒回）
   include: [baidu, bing, google]   # 只聚合这些引擎（默认全部）
   blockedHosts: [...]              # 额外过滤的域名
   fetchMode: auto           # http(纯浏览器式抓取) | chrome(恒走常驻无头渲染) | auto(HTTP优先,JS壳自动渲染兜底)

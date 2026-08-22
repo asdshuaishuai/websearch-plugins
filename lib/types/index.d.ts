@@ -51,6 +51,12 @@ export interface WebSearchPluginsConfig {
 	aggregateMaxResults?: number;
 	/** Default per-engine fetch timeout (default 7000). */
 	engineTimeoutMs?: number;
+	/** Early-return when ≥ this many engines contributed (default 3). */
+	aggregateQuorum?: number;
+	/** Minimum wait before early-return decision (default 800). */
+	aggregateMinWaitMs?: number;
+	/** Short TTL cache for repeated queries in ms; 0 disables (default 30000). */
+	aggregateCacheMs?: number;
 	/** Engine ids to include in the aggregate; empty means all. */
 	include?: string[];
 	/** User-Agent sent to SERP endpoints (also reused by the fetch provider). */

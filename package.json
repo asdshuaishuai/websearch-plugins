@@ -1,6 +1,6 @@
 {
   "name": "websearch-plugins",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "A standard DeepSeek Harness (dsh) plugin: API-key-free aggregate web search across 16 domestic + overseas engines with result-layer failure filtering, a dedicated always-on headless Blink/Chromium renderer, and a direct target-URL fetch (web_fetch) with SSRF protection — all behind the ctx.web seam.",
   "private": true,
   "type": "module",
