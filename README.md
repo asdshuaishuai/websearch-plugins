@@ -130,6 +130,10 @@ dsh plugin --profile web add github:asdshuaishuai/websearch-plugins
 `dsh plugin` 会把它加进 `dsh.profile.bundles`，之后**重启 GUI**（在启动 `dsh web` 的终端里
 Ctrl+C 后重新运行）并刷新页面即生效。
 
+> 本地开发建议用 **`link:`** 依赖（如 `dsh plugin --profile web add link:/path/to/websearch-plugins`）：
+> profile 会符号链接到源码目录，**改代码后重启即生效，无需重装**；`file:` 依赖是拷贝、
+> 升级后必须重跑 `dsh plugin add` 才会刷新。
+
 **旧方式（手动）**——仅当不便 `dsh plugin` 时可选：软链
 `~/.dsh/profiles/node_modules/websearch-plugins` → 本目录，并手工在
 `~/.dsh/profiles/web/cordis.patch.yml` 写 `insert: [web-search-phantom]` +
